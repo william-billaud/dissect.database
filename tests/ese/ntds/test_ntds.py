@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from dissect.database.ese.ntds.objects import Computer, Group, Server, SubSchema, User
+from dissect.database.ese.ntds.objects import Computer, DnsNode, Group, Server, SubSchema, User
 
 if TYPE_CHECKING:
     from dissect.database.ese.ntds import NTDS
@@ -259,3 +259,11 @@ def test_all_memberships(large: NTDS) -> None:
     for user in large.users():
         # Just iterate all memberships to see if any errors occur
         list(user.groups())
+
+
+def test_dnsnode(goad: NTDS) -> None:
+    dns_node: list[DnsNode] = sorted(goad.dns_node(), key=lambda x: x.name)
+    assert len(dns_node) == 113
+    a = sum((d.dns_record for d in dns_node), [])
+    print(list(u for u in a))
+    assert len(a) == 100
