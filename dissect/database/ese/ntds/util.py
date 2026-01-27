@@ -67,7 +67,7 @@ OID_PREFIX = {
     0x00250000: "1.3.6.1.1.1.1",
     0x00260000: "1.3.6.1.1.1.2",
     0x46080000: "1.2.840.113556.1.8000.2554",  # commonly used for custom attributes
-#    0x48230000: "1.2.840.113556.1.4.7000.102",  # Related to exchange
+    0x48230000: "1.2.840.113556.1.4.7000.102",  # Related to exchange, observed on 2012R2
 }
 
 
@@ -84,7 +84,12 @@ def attrtyp_to_oid(value: int) -> str:
     Returns:
         The OID string representation.
     """
-    return f"{OID_PREFIX[value & 0xFFFF0000]:s}.{value & 0x0000FFFF:d}"
+    if value is None:
+        return f"NONE"
+    if value & 0xFFFF0000 in OID_PREFIX:
+        return f"{OID_PREFIX.get(value & 0xFFFF0000):s}.{value & 0x0000FFFF:d}"
+    else:
+        f"MISSING.{value & 0x0000FFFF:d}"
 
 
 # https://learn.microsoft.com/en-us/windows/win32/adschema/a-instancetype

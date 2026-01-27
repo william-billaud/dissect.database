@@ -174,18 +174,18 @@ class Schema:
             if obj.get("attributeID", raw=True) is None:
                 print(f"Weird attributes : {obj.get('lDAPDisplayName')}")
                 print(obj.as_dict())
-
-            self._add_attribute(
-                dnt=obj.dnt,
-                id=obj.get("attributeID", raw=True),
-                name=obj.get("lDAPDisplayName"),
-                syntax=obj.get("attributeSyntax", raw=True),
-                om_syntax=obj.get("oMSyntax"),
-                om_object_class=obj.get("oMObjectClass"),
-                is_single_valued=obj.get("isSingleValued"),
-                link_id=obj.get("linkId"),
-                search_flags=obj.get("searchFlags"),
-            )
+            else:
+                self._add_attribute(
+                    dnt=obj.dnt,
+                    id=obj.get("attributeID", raw=True),
+                    name=obj.get("lDAPDisplayName"),
+                    syntax=obj.get("attributeSyntax", raw=True),
+                    om_syntax=obj.get("oMSyntax"),
+                    om_object_class=obj.get("oMObjectClass"),
+                    is_single_valued=obj.get("isSingleValued"),
+                    link_id=obj.get("linkId"),
+                    search_flags=obj.get("searchFlags"),
+                )
 
         for obj in _iter(class_schema.id):
             self._add_class(
@@ -216,20 +216,23 @@ class Schema:
         search_flags: SearchFlags | None,
     ) -> None:
         type_oid = attrtyp_to_oid(syntax)
-        entry = AttributeEntry(
-            dnt=dnt,
-            oid=attrtyp_to_oid(id),
-            id=id,
-            name=name,
-            column=f"ATT{OID_TO_TYPE[type_oid]}{id}",
-            type=type_oid,
-            om_syntax=om_syntax,
-            om_object_class=om_object_class,
-            is_single_valued=is_single_valued,
-            link_id=link_id,
-            search_flags=search_flags,
-        )
-        self._add(entry)
+        try:
+            entry = AttributeEntry(
+                dnt=dnt,
+                oid=attrtyp_to_oid(id),
+                id=id,
+                name=name,
+                column=f"ATT{OID_TO_TYPE[type_oid]}{id}",
+                type=type_oid,
+                om_syntax=om_syntax,
+                om_object_class=om_object_class,
+                is_single_valued=is_single_valued,
+                link_id=link_id,
+                search_flags=search_flags,
+            )
+            self._add(entry)
+        except KeyError as e:
+            print(f"{name} : {type_oid} : {id} : {e}")
 
     def _add(self, entry: ClassEntry | AttributeEntry) -> None:
         if entry.dnt != -1:

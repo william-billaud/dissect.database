@@ -19,7 +19,7 @@ def main() -> None:
 
         for record in ntds.search(objectClass=args.objectClass):
             if args.json:
-                print(json.dumps(record, default=str))
+                print(json.dumps(record.as_dict(), default=str))
             else:
                 print(record)
 
