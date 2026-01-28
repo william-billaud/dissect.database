@@ -171,9 +171,6 @@ class Schema:
 
         for obj in _iter(attribute_schema.id):
 
-            if obj.get("attributeID", raw=True) is None:
-                print(f"Weird attributes : {obj.get('lDAPDisplayName')}")
-                print(obj.as_dict())
 
             self._add_attribute(
                 dnt=obj.dnt,
