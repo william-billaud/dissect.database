@@ -512,7 +512,6 @@ class Cell:
         if not self._data:
             offset = self._offset + self._record_offset
             page_data = self.page.data
-            page_size = self.page.sqlite.page_size
 
             if self.size <= self.max_payload_size:
                 size = max(self.size, 4)
@@ -545,7 +544,7 @@ class Cell:
                     # overflow_size is the size of the page data without the
                     # extra 4 bytes for the next overflow page, so it needs to
                     # be added.
-                    data_size = min(overflow_size + 4, page_size)
+                    data_size = min(overflow_size + 4, self.page.sqlite.usable_page_size)
                     page_buf = self.page.sqlite.raw_page(overflow_page)[:data_size]
 
                     overflow_page = c_sqlite3.uint32(page_buf[:4])
