@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import argparse
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO
 
 from dissect.database.ese.ntds.database import Database
@@ -89,3 +92,27 @@ class NTDS:
     def trusts(self) -> Iterator[TrustedDomain]:
         """Get all trust objects from the database."""
         yield from self.search(objectClass="trustedDomain")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="dissect.database.ese NTDS parser",
+        usage="python3 -m dissect.database.ese.ntds.ntds -o User /path/to/ntds.dit",
+    )
+    parser.add_argument("input", help="NTDS database to read")
+    parser.add_argument("-o", "--objectClass", help="show only 'object'", required=True)
+    parser.add_argument("-j", "--json", help="output in JSON format", action="store_true", default=False)
+    args = parser.parse_args()
+
+    with Path(args.input).open("rb") as fh:
+        ntds = NTDS(fh)
+
+        for record in ntds.search(objectClass=args.objectClass):
+            if args.json:
+                print(json.dumps(record.as_dict(), default=str))
+            else:
+                print(record)
+
+
+if __name__ == "__main__":
+    main()
