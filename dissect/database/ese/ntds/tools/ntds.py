@@ -11,7 +11,7 @@ def main() -> None:
         usage="python3 -m dissect.database.ese.ntds.ntds -o User /path/to/ntds.dit",
     )
     parser.add_argument("input", help="NTDS database to read")
-    parser.add_argument("-o", "--objectClass", help="show only objects of this class", required=True)
+    parser.add_argument("-c", "--objectClass", help="show only objects of this class", required=True)
     parser.add_argument("-j", "--json", action="store_true", default=False, help="output in JSON format")
     args = parser.parse_args()
 
