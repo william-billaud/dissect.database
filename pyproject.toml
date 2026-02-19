@@ -67,12 +67,12 @@ dev = [
 ]
 
 [project.scripts]
-dissect-db-ntds = "dissect.database.ese.ntds.tools:main"
-dissect-db-ual = "dissect.database.ese.tools.ual:main"
-dissect-db-sru = "dissect.database.ese.tools.sru:main"
-dissect-db-certlog = "dissect.database.ese.tools.certlog:main"
-dissect-db-rpm = "dissect.database.bsd.tools.rpm:main"
-dissect-db-impacket = "dissect.database.ese.tools.impacket:main"
+dissect-ntds = "dissect.database.ese.ntds.tools:main"
+dissect-ual = "dissect.database.ese.tools.ual:main"
+dissect-sru = "dissect.database.ese.tools.sru:main"
+dissect-certlog = "dissect.database.ese.tools.certlog:main"
+dissect-rpm = "dissect.database.bsd.tools.rpm:main"
+dissect-impacket = "dissect.database.ese.tools.impacket:main"
 
 [tool.ruff]
 line-length = 120
