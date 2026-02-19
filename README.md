@@ -20,7 +20,7 @@ This module is also automatically installed if you install the `dissect` package
 
 ## Tools
 
-Some cli tools, related to specific database exists. These tools allows to simply dump database content.
+Some CLI tools related to specific databases exists. These tools allow you to dump or inspect database content.
 
 | Commands            | Description                                                                                                                                                      |
 |---------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
