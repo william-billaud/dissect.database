@@ -149,6 +149,11 @@ class Entry:
         column_values = serialise_record_column_values(self.record)
         return f"<Entry provider={self.table.name!r} {column_values}>"
 
+    def as_dict(self) -> dict:
+        ret = self.record.as_dict()
+        ret["provider"] = self.table.name
+        return ret
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="dissect.database.ese SRU parser")
@@ -168,9 +173,7 @@ def main() -> None:
             generator = parser.entries()
         for e in generator:
             if args.json:
-                record_as_dict = e.record.as_dict()
-                record_as_dict["provider"] = e.table.name
-                print(json.dumps(record_as_dict, default=str))
+                print(json.dumps(e.as_dict(), default=str))
             else:
                 print(e)
 
