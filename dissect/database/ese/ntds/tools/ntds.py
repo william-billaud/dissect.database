@@ -6,10 +6,7 @@ from dissect.database.ese.ntds import NTDS
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="dissect.database.ese NTDS parser",
-        usage="python3 -m dissect.database.ese.ntds.ntds -o User /path/to/ntds.dit",
-    )
+    parser = argparse.ArgumentParser(description="dissect.database.ese.ntds NTDS parser")
     parser.add_argument("input", help="NTDS database to read")
     parser.add_argument("-c", "--objectClass", help="show only objects of this class", required=True)
     parser.add_argument("-j", "--json", action="store_true", default=False, help="output in JSON format")
