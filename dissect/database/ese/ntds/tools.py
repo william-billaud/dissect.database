@@ -12,7 +12,7 @@ def main() -> None:
     )
     parser.add_argument("input", help="NTDS database to read")
     parser.add_argument("-o", "--objectClass", help="show only 'object'", required=True)
-    parser.add_argument("-j", "--json", help="output in JSON format", action="store_true", default=False)
+    parser.add_argument("-j", "--json", action="store_true", default=False, help="output in JSON format")
     args = parser.parse_args()
 
     with Path(args.input).open("rb") as fh:
