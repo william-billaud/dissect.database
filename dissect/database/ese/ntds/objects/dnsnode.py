@@ -15,15 +15,12 @@ log = logging.getLogger(__name__)
 
 
 def swap_endianess(data: int, int_len: int = 2, unsigned: bool = True) -> int:
-    """
-    Swap endianess for a integer value
+    """Swap endianess for a integer value.
+
     Args:
         data: integer to conver
         int_len: 1, 2, 4 or 8
         unsigned: if integer must be considered a signed or unsigned int
-
-    Returns:
-
     """
     struct_letter = "h"
     match int_len:
@@ -58,7 +55,11 @@ class DnsAAAARecord(NamedTuple):
 
 
 class SOARecord(NamedTuple):
-    """https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/dcd3ec16-d6bf-4bb4-9128-6172f9e5f066"""
+    """The DNS_RPC_RECORD_SOA structure contains information about an SOA record.
+
+    References:
+        - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/dcd3ec16-d6bf-4bb4-9128-6172f9e5f066
+    """
 
     name_primary_server: str
     serial: int
@@ -69,26 +70,46 @@ class SOARecord(NamedTuple):
 
 
 class NodeNameRecord(NamedTuple):
-    """https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/8f986756-f151-4f5b-bfcf-0d85be8b0d7e"""
+    """The DNS_RPC_RECORD_NODE_NAME structure contains information about a DNS record of any of the following types:
+        DNS_TYPE_PTR, DNS_TYPE_NS, DNS_TYPE_CNAME, DNS_TYPE_DNAME, DNS_TYPE_MB, DNS_TYPE_MR,
+        DNS_TYPE_MG, DNS_TYPE_MD, DNS_TYPE_MF.
+
+    References:
+        - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/8f986756-f151-4f5b-bfcf-0d85be8b0d7e
+    """
 
     name_node: str
 
 
 class StringRecord(NamedTuple):
-    """https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/69166ff5-36c1-4542-9243-13b8931fa447"""
+    """The DNS_RPC_RECORD_STRING structure contains information about a DNS record of any of the following types:
+        DNS_TYPE_HINFO, DNS_TYPE_ISDN, DNS_TYPE_TXT, DNS_TYPE_X25, DNS_TYPE_LOC.
+
+    References:
+        - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/69166ff5-36c1-4542-9243-13b8931fa447
+    """
 
     stringData: str
 
 
 class NamePreferenceRecord(NamedTuple):
-    """https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/f647d391-6614-4c3e-b38b-4df971590eb6"""
+    """The DNS_RPC_RECORD_NAME_PREFERENCE structure specifies information about a DNS
+    record of any of the following types: DNS_TYPE_MX, DNS_TYPE_AFSDB, DNS_TYPE_RT.
+
+    References:
+        - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/f647d391-6614-4c3e-b38b-4df971590eb6
+    """
 
     name_exchange: str
     preference: int
 
 
 class SRVRecord(NamedTuple):
-    """https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/db37cab7-f121-43ba-81c5-ca0e198d4b9a"""
+    """SRV ressource records.
+
+    References:
+        - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/db37cab7-f121-43ba-81c5-ca0e198d4b9a
+    """
 
     name_target: str
     port: int
@@ -97,18 +118,23 @@ class SRVRecord(NamedTuple):
 
 
 class DnsRecord:
+    """The dnsRecord attribute is used to store DNS resource record definitions.
+
+    References:
+        - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/6912b338-5472-4f59-b912-0edb536b6ed8
+    """
     def __init__(self, dns_records_bytes: bytes):
-        self.raw = dns_records_bytes
-        self.c_record_header = c_dns_record.DNS_RECORD_HEADER(dns_records_bytes)
-        self.type = self.c_record_header.Type
-        self.ttl_seconds = swap_endianess(self.c_record_header.TtlSeconds, int_len=4)
-        self.timestamp = self._timestamp()
+        self.raw : bytes = dns_records_bytes
+        self.c_record_header : c_dns_record.DNS_RECORD_HEADER = c_dns_record.DNS_RECORD_HEADER(dns_records_bytes)
+        self.type : c_dns_record.DNS_RECORD_TYPE = self.c_record_header.Type
+        self.ttl_seconds : int = swap_endianess(self.c_record_header.TtlSeconds, int_len=4)
+        self.timestamp : datetime.datetime | None = self.get_timestamp_as_datetime()
 
     def __repr__(self):
         return f"type={self.type!r} ttl_seconds={self.ttl_seconds!r} timestamp={self.timestamp} data={self.data}"
 
-    def _timestamp(self) -> datetime.datetime | None:
-        """timestamp is stored in hours"""
+    def get_timestamp_as_datetime(self) -> datetime.datetime | None:
+        """Timestamp is stored in hours."""
         if self.c_record_header.TimeStamp == 0:
             return None
         try:
@@ -145,13 +171,14 @@ class DnsRecord:
                 return self._parse_srv_record(data)
             case DNS_RECORD_TYPE.SOA:
                 return self._parse_soa_record(data)
-            case DNS_RECORD_TYPE.HINFO | DNS_RECORD_TYPE.ISDN | DNS_RECORD_TYPE.TXT, DNS_RECORD_TYPE.X25 | DNS_RECORD_TYPE.LOC:
+            case (DNS_RECORD_TYPE.HINFO | DNS_RECORD_TYPE.ISDN | DNS_RECORD_TYPE.TXT,
+                  DNS_RECORD_TYPE.X25 | DNS_RECORD_TYPE.LOC):
                 return self._parse_string_record(data)
         return data
 
     @classmethod
     def _parse_a_record(cls, data: bytes) -> DnsARecord | None:
-        """Parse A record (IPv4 address)"""
+        """Parse A record (IPv4 address)."""
         if len(data) >= 4:
             ip = socket.inet_ntop(socket.AF_INET, data[:4])
             return DnsARecord(ipv4_address=ip)
@@ -159,16 +186,18 @@ class DnsRecord:
 
     @classmethod
     def _parse_aaaa_record(cls, data: bytes) -> DnsAAAARecord | None:
-        """Parse AAAA record (IPv4 address)"""
+        """Parse AAAA record (IPv4 address)."""
         if len(data) >= 16:
-            print()
             ip = socket.inet_ntop(socket.AF_INET6, data[:16])
             return DnsAAAARecord(ipv6_address=ip)
         return None
 
     @classmethod
     def _parse_soa_record(cls, data: bytes) -> SOARecord | None:
-        """https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/dcd3ec16-d6bf-4bb4-9128-6172f9e5f066
+        """Parse SOA records.
+
+        References:
+            https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/dcd3ec16-d6bf-4bb4-9128-6172f9e5f066
         Todo parse all fields
         """
         try:
@@ -189,7 +218,7 @@ class DnsRecord:
     def _parse_node_name_record(cls, data: bytes) -> NodeNameRecord | None:
         """Parse Node Name type record, used for following record type :
         DNS_TYPE_PTR, DNS_TYPE_N, DNS_TYPE_CNAM, DNS_TYPE_DNAM,
-        DNS_TYPE_M, DNS_TYPE_M, DNS_TYPE_M, DNS_TYPE_M, DNS_TYPE_MF
+        DNS_TYPE_M, DNS_TYPE_M, DNS_TYPE_M, DNS_TYPE_M, DNS_TYPE_MF.
 
         """
         try:
@@ -201,7 +230,7 @@ class DnsRecord:
 
     @classmethod
     def _parse_name_preference_record(cls, data: bytes) -> NamePreferenceRecord | None:
-        """Parse DNS_RPC_RECORD_NAME_PREFERENCE record (E.g Mx)"""
+        """Parse DNS_RPC_RECORD_NAME_PREFERENCE record (E.g Mx)."""
         try:
             dns_rpc_record_name_preference = c_dns_record.DNS_RPC_RECORD_NAME_PREFERENCE(data)
             return NamePreferenceRecord(
@@ -213,7 +242,7 @@ class DnsRecord:
 
     @classmethod
     def _parse_srv_record(cls, data: bytes) -> SRVRecord | None:
-        """Parse SRV record"""
+        """Parse SRV record."""
         try:
             dns_rpc_record_srv = c_dns_record.DNS_RPC_RECORD_SRV(data)
             target = cls._parse_dns_name(dns_rpc_record_srv.nameTarget.dnsName)
@@ -229,10 +258,10 @@ class DnsRecord:
     @classmethod
     def _parse_string_record(cls, data: bytes) -> StringRecord | None:
         """Parse Node Name type record, used for following record type :
-        DNS_TYPE_HINFO, DNS_TYPE_ISDN, DNS_TYPE_TXT, DNS_TYPE_X25, DNS_TYPE_LOC
+        DNS_TYPE_HINFO, DNS_TYPE_ISDN, DNS_TYPE_TXT, DNS_TYPE_X25, DNS_TYPE_LOC.
         """
         try:
-            return StringRecord(c_dns_record.DNS_RPC_NAME(data).dnsName.decode('utf-8', errors="backslashreplace"))
+            return StringRecord(c_dns_record.DNS_RPC_NAME(data).dnsName.decode("utf-8", errors="backslashreplace"))
         except EOFError:
             log.warning("Error while processing node name record%s", data)
             hexdump(data)
@@ -240,12 +269,7 @@ class DnsRecord:
 
     @classmethod
     def _parse_dns_name(cls, data: bytes) -> str:
-        """Parse DNS name as specified in rfc1035#section-3.1 format
-
-        Args:
-            data:
-
-        Returns:
+        """Parse DNS name as specified in rfc1035#section-3.1 format.
 
         References:
             - https://datatracker.ietf.org/doc/html/rfc1035#section-3.1

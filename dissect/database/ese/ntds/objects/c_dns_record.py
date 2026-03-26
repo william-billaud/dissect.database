@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dissect.cstruct import cstruct
 
 dns_record_def = """
@@ -50,6 +52,7 @@ enum DNS_RECORD_TYPE : uint16 {
     WINSR = 0xFF02        // A record type containing WINS reverse lookup data [MS-WINSRA].
 };
 
+// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/6912b338-5472-4f59-b912-0edb536b6ed8
 typedef struct DNS_RECORD_HEADER {
     uint16             DataLength;
     DNS_RECORD_TYPE    Type;

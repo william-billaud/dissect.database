@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 from dissect.database.ese.ntds.objects.dnsnode import DnsRecord, _parse_dns_name
