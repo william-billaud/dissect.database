@@ -71,7 +71,7 @@ typedef struct DNS_RECORD_HEADER {
 // But observed reality is a null terminated string (null char not counted in NameLength)
 typedef struct DNS_RPC_NAME{
     uint8 NameLength;
-    char  dnsName[NameLength+1];
+    char  dnsName[NameLength];
 }
 
 // https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/db37cab7-f121-43ba-81c5-ca0e198d4b9a
@@ -98,6 +98,7 @@ typedef struct DNS_RPC_RECORD_SOA {
     uint32             Expire;
     uint32             MinimumTtl;
     DNS_RPC_NAME       namePrimaryServer;
+    uint8              _pad;
     DNS_RPC_NAME       ZoneAdministratorEmail;
 };
 

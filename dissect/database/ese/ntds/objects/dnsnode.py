@@ -149,6 +149,7 @@ class DnsRecord:
     ):
         data = bytearray(self.c_record_header.Data)
         DNS_RECORD_TYPE = c_dns_record.DNS_RECORD_TYPE
+
         match self.type:
             case DNS_RECORD_TYPE.A:
                 return self._parse_a_record(data)
@@ -173,8 +174,11 @@ class DnsRecord:
             case DNS_RECORD_TYPE.SOA:
                 return self._parse_soa_record(data)
             case (
-                DNS_RECORD_TYPE.HINFO | DNS_RECORD_TYPE.ISDN | DNS_RECORD_TYPE.TXT,
-                DNS_RECORD_TYPE.X25 | DNS_RECORD_TYPE.LOC,
+                DNS_RECORD_TYPE.HINFO
+                | DNS_RECORD_TYPE.ISDN
+                | DNS_RECORD_TYPE.TXT
+                | DNS_RECORD_TYPE.X25
+                | DNS_RECORD_TYPE.LOC
             ):
                 return self._parse_string_record(data)
             case DNS_RECORD_TYPE.ZERO:
@@ -212,7 +216,6 @@ class DnsRecord:
         References:
             https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/dcd3ec16-d6bf-4bb4-9128-6172f9e5f066
         """
-        print(data)
         try:
             dns_rpc_record_soa = c_dns_record.DNS_RPC_RECORD_SOA(data)
 
@@ -253,7 +256,7 @@ class DnsRecord:
         try:
             dns_rpc_record_name_preference = c_dns_record.DNS_RPC_RECORD_NAME_PREFERENCE(data)
             return NamePreferenceRecord(
-                preference=dns_rpc_record_name_preference.Preference,
+                preference=swap_endianess(dns_rpc_record_name_preference.Preference, 2),
                 name_exchange=cls._parse_dns_name(dns_rpc_record_name_preference.nameExchange.dnsName),
             )
         except EOFError:
@@ -283,14 +286,22 @@ class DnsRecord:
         """Parse Node Name type record, used for following record type :
         DNS_TYPE_HINFO, DNS_TYPE_ISDN, DNS_TYPE_TXT, DNS_TYPE_X25, DNS_TYPE_LOC.
 
+        Test using GUI does not allow to create record with a line length > 255 char.
+
         References:
             - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/69166ff5-36c1-4542-9243-13b8931fa447
         """
+        records = []
         try:
-            return StringRecord(c_dns_record.DNS_RPC_NAME(data).dnsName.decode("utf-8", errors="backslashreplace"))
+            data_consumed = 0
+
+            while data_consumed < len(data):
+                rpc_name = c_dns_record.DNS_RPC_NAME(data[data_consumed:])
+                data_consumed += len(rpc_name) + 1  # Null byte present
+                records.append(rpc_name.dnsName.decode("utf-8", errors="backslashreplace"))
+            return StringRecord("\n".join(records))
         except EOFError:
-            log.warning("Error while processing node name record%s", data)
-            hexdump(data)
+            log.warning("Error while processing node name record %s", data, exc_info=True)
             return None
 
     @classmethod
@@ -322,9 +333,8 @@ class DnsRecord:
         if not data:
             return ""
         _nb_segment = data[0]
-        data = data[1:]
         name_parts = []
-        offset = 0
+        offset = 1
         # Domain names in messages are expressed in terms of a sequence of labels.
         # Each label is represented as a one octet length field followed by that
         # number of octets.  Since every domain name ends with the null label of
@@ -347,7 +357,6 @@ class DnsRecord:
             part = data[offset : offset + length].decode("utf-8", errors="backslashreplace")
             name_parts.append(part)
             offset += length
-
         return ".".join(name_parts) if name_parts else ""
 
 
