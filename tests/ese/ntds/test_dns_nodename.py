@@ -52,9 +52,19 @@ def test_parse_dns_string_record() -> None:
         b"and an special char (euro) : \xe2\x82\xac"
     ).stringData == (
         "TXT record made for dissect. Quite long to test if there is some limit size, "
-        "like over 64 characters or something like that.\n"
+        "like over 64 characters or something like that.\n\n"
         "Two new line above, and an special char (euro) : €"
     )
+
+    assert DnsRecord._parse_string_record(
+        b"\xd6this is a very long record, with a size over 255, as string size is stored on a unint."
+        b" Very vey very very very very very very very very vey very very very very very very very very vey very very"
+        b" very very very veryg\x00\x00\nA new line\x17And we continue tthis i"
+    ).stringData == ("this is a very long record, with a size over 255, as string size is stored on a unint. Very vey"
+                     " very very very very very very very very vey very very very very very very very very vey very"
+                     " very very very very veryg\n\n\nA new line\nAnd we continue tthis i")
+    assert (DnsRecord._parse_string_record(b"\x01q\x02qw\x03qwe\x04qwer\x05qwert\x06qwerty\x08qwertyui").stringData
+            == ("q\nqw\nqwe\nqwer\nqwert\nqwerty\nqwertyui"))
 
 
 def test_parse_dns_string_null_record() -> None:

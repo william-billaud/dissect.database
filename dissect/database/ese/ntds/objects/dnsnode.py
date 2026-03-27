@@ -297,11 +297,12 @@ class DnsRecord:
 
             while data_consumed < len(data):
                 rpc_name = c_dns_record.DNS_RPC_NAME(data[data_consumed:])
-                data_consumed += len(rpc_name) + 1  # Null byte present
+                data_consumed += len(rpc_name)
+
                 records.append(rpc_name.dnsName.decode("utf-8", errors="backslashreplace"))
             return StringRecord("\n".join(records))
         except EOFError:
-            log.warning("Error while processing node name record %s", data, exc_info=True)
+            log.warning("Error while processing node name record %s : %s", data, records, exc_info=True)
             return None
 
     @classmethod
