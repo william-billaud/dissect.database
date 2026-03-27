@@ -135,7 +135,18 @@ class DnsRecord:
             return None
 
     @property
-    def data(self) -> bytes | DnsARecord | DnsAAAARecord | NodeNameRecord | NamePreferenceRecord | StringRecord | None:
+    def data(
+        self,
+    ) -> (
+        bytes
+        | DnsARecord
+        | DnsAAAARecord
+        | NodeNameRecord
+        | NamePreferenceRecord
+        | StringRecord
+        | TombStonedRecord
+        | None
+    ):
         data = bytearray(self.c_record_header.Data)
         DNS_RECORD_TYPE = c_dns_record.DNS_RECORD_TYPE
         match self.type:
@@ -201,6 +212,7 @@ class DnsRecord:
         References:
             https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/dcd3ec16-d6bf-4bb4-9128-6172f9e5f066
         """
+        print(data)
         try:
             dns_rpc_record_soa = c_dns_record.DNS_RPC_RECORD_SOA(data)
 
@@ -259,8 +271,8 @@ class DnsRecord:
             target = cls._parse_dns_name(dns_rpc_record_srv.nameTarget.dnsName)
             return SRVRecord(
                 priority=dns_rpc_record_srv.Priority,
-                weight=dns_rpc_record_srv.Weight,
-                port=dns_rpc_record_srv.Port,
+                weight=swap_endianess(dns_rpc_record_srv.Weight, 2),
+                port=swap_endianess(dns_rpc_record_srv.Port, 2),
                 name_target=target,
             )
         except EOFError:

@@ -60,7 +60,19 @@ class _c_dns_record(__cs__.cstruct):
         TimeStamp: _c_dns_record.uint32
         Data: __cs__.Array[_c_dns_record.uint8]
         @overload
-        def __init__(self, DataLength: _c_dns_record.uint16 | None = ..., Type: _c_dns_record.DNS_RECORD_TYPE | None = ..., Version: _c_dns_record.uint8 | None = ..., Rank: _c_dns_record.uint8 | None = ..., Flags: _c_dns_record.uint16 | None = ..., Serial: _c_dns_record.uint32 | None = ..., TtlSeconds: _c_dns_record.uint32 | None = ..., Reserved: _c_dns_record.uint32 | None = ..., TimeStamp: _c_dns_record.uint32 | None = ..., Data: __cs__.Array[_c_dns_record.uint8] | None = ...): ...
+        def __init__(
+            self,
+            DataLength: _c_dns_record.uint16 | None = ...,
+            Type: _c_dns_record.DNS_RECORD_TYPE | None = ...,
+            Version: _c_dns_record.uint8 | None = ...,
+            Rank: _c_dns_record.uint8 | None = ...,
+            Flags: _c_dns_record.uint16 | None = ...,
+            Serial: _c_dns_record.uint32 | None = ...,
+            TtlSeconds: _c_dns_record.uint32 | None = ...,
+            Reserved: _c_dns_record.uint32 | None = ...,
+            TimeStamp: _c_dns_record.uint32 | None = ...,
+            Data: __cs__.Array[_c_dns_record.uint8] | None = ...,
+        ): ...
         @overload
         def __init__(self, fh: bytes | memoryview | bytearray | BinaryIO, /): ...
 
@@ -78,7 +90,13 @@ class _c_dns_record(__cs__.cstruct):
         Port: _c_dns_record.uint16
         nameTarget: _c_dns_record.DNS_RPC_NAME
         @overload
-        def __init__(self, Priority: _c_dns_record.uint16 | None = ..., Weight: _c_dns_record.uint16 | None = ..., Port: _c_dns_record.uint16 | None = ..., nameTarget: _c_dns_record.DNS_RPC_NAME | None = ...): ...
+        def __init__(
+            self,
+            Priority: _c_dns_record.uint16 | None = ...,
+            Weight: _c_dns_record.uint16 | None = ...,
+            Port: _c_dns_record.uint16 | None = ...,
+            nameTarget: _c_dns_record.DNS_RPC_NAME | None = ...,
+        ): ...
         @overload
         def __init__(self, fh: bytes | memoryview | bytearray | BinaryIO, /): ...
 
@@ -86,7 +104,9 @@ class _c_dns_record(__cs__.cstruct):
         Preference: _c_dns_record.uint16
         nameExchange: _c_dns_record.DNS_RPC_NAME
         @overload
-        def __init__(self, Preference: _c_dns_record.uint16 | None = ..., nameExchange: _c_dns_record.DNS_RPC_NAME | None = ...): ...
+        def __init__(
+            self, Preference: _c_dns_record.uint16 | None = ..., nameExchange: _c_dns_record.DNS_RPC_NAME | None = ...
+        ): ...
         @overload
         def __init__(self, fh: bytes | memoryview | bytearray | BinaryIO, /): ...
 
@@ -99,7 +119,16 @@ class _c_dns_record(__cs__.cstruct):
         namePrimaryServer: _c_dns_record.DNS_RPC_NAME
         ZoneAdministratorEmail: _c_dns_record.DNS_RPC_NAME
         @overload
-        def __init__(self, Serial: _c_dns_record.uint32 | None = ..., Refresh: _c_dns_record.uint32 | None = ..., Retry: _c_dns_record.uint32 | None = ..., Expire: _c_dns_record.uint32 | None = ..., MinimumTtl: _c_dns_record.uint32 | None = ..., namePrimaryServer: _c_dns_record.DNS_RPC_NAME | None = ..., ZoneAdministratorEmail: _c_dns_record.DNS_RPC_NAME | None = ...): ...
+        def __init__(
+            self,
+            Serial: _c_dns_record.uint32 | None = ...,
+            Refresh: _c_dns_record.uint32 | None = ...,
+            Retry: _c_dns_record.uint32 | None = ...,
+            Expire: _c_dns_record.uint32 | None = ...,
+            MinimumTtl: _c_dns_record.uint32 | None = ...,
+            namePrimaryServer: _c_dns_record.DNS_RPC_NAME | None = ...,
+            ZoneAdministratorEmail: _c_dns_record.DNS_RPC_NAME | None = ...,
+        ): ...
         @overload
         def __init__(self, fh: bytes | memoryview | bytearray | BinaryIO, /): ...
 
