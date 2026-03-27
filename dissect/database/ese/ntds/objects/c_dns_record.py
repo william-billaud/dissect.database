@@ -100,5 +100,12 @@ typedef struct DNS_RPC_RECORD_SOA {
     DNS_RPC_NAME       namePrimaryServer;
     DNS_RPC_NAME       ZoneAdministratorEmail;
 };
+
+
+// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/def7736a-dd09-4b4a-b8d6-6a702a7ecde0
+typedef struct DNS_RPC_RECORD_TS {
+    uint64             EntombedTime;
+};
+
 """
 c_dns_record = cstruct(dns_record_def)

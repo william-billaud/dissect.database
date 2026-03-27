@@ -103,5 +103,12 @@ class _c_dns_record(__cs__.cstruct):
         @overload
         def __init__(self, fh: bytes | memoryview | bytearray | BinaryIO, /): ...
 
+    class DNS_RPC_RECORD_TS(__cs__.Structure):
+        EntombedTime: _c_dns_record.uint64
+        @overload
+        def __init__(self, EntombedTime: _c_dns_record.uint64 | None = ...): ...
+        @overload
+        def __init__(self, fh: bytes | memoryview | bytearray | BinaryIO, /): ...
+
 # Technically `c_dns_record` is an instance of `_c_dns_record`, but then we can't use it in type hints
 c_dns_record: TypeAlias = _c_dns_record
