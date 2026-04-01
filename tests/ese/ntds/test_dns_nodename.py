@@ -143,11 +143,12 @@ def test_parse_name_a_record() -> None:
 
 
 def test_dns_nodes(goad: NTDS) -> None:
-    """Test multiple DNS records from GOAD NTDS."""
+    """Test multiple DNS records from GOAD NTDS. Also test repr and as dict."""
     dns_nodes = list(goad.dns_nodes())
     assert len(dns_nodes) == 113
     # there is no really guaranty regarding record order, thus we select them using name
     a_record = next(node for node in dns_nodes if node.name == "WINTERFELL.north").dns_record[0]
+    assert repr(a_record) == "type='A' ttl_seconds=3600 timestamp=None data=DnsARecord(ipv4_address='10.0.2.15')"
     assert isinstance(a_record.data, DnsARecord)
     assert a_record.data.ipv4_address == "10.0.2.15"
     assert a_record.data.ip_address == "10.0.2.15"
@@ -167,6 +168,18 @@ def test_dns_nodes(goad: NTDS) -> None:
     assert srv_record.data.priority == 0
     assert srv_record.timestamp == datetime.datetime.fromisoformat("2025-12-18 17:00:00+00:00")
     assert srv_record.ttl_seconds == 600
+
+    assert (
+        repr(srv_record) == "type='SRV' ttl_seconds=600 timestamp=2025-12-18 17:00:00+00:00 "
+        "data=SRVRecord(name_target='winterfell.north.sevenkingdoms.local', port=389, weight=100, priority=0)"
+    )
+
+    assert srv_record.as_dict() == {
+        "data": {"name_target": "winterfell.north.sevenkingdoms.local", "port": 389, "priority": 0, "weight": 100},
+        "timestamp": datetime.datetime(2025, 12, 18, 17, 0, tzinfo=datetime.timezone.utc),
+        "ttl_seconds": 600,
+        "type": "SRV",
+    }
 
     _msdcs = next(node for node in dns_nodes if node.distinguished_name_as_dns_name == "_msdcs.sevenkingdoms.local")
     soa_record: DnsRecord = next(record for record in _msdcs.dns_record if record.type == DNS_RECORD_TYPE.SOA)
@@ -195,3 +208,15 @@ def test_dns_nodes(goad: NTDS) -> None:
     assert aaaa_record.data.ip_address == "2001:500:9f::42"
     assert aaaa_record.timestamp is None
     assert aaaa_record.ttl_seconds == 0
+
+    assert repr(aaaa_record) == (
+        "type='AAAA' ttl_seconds=0 timestamp=None data=DnsAAAARecord(ipv6_address='2001:500:9f::42')"
+    )
+    assert aaaa_record.as_dict() == {
+        "data": {
+            "ipv6_address": "2001:500:9f::42",
+        },
+        "timestamp": None,
+        "ttl_seconds": 0,
+        "type": "AAAA",
+    }

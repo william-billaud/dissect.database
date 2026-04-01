@@ -299,7 +299,7 @@ class DnsRecord:
         self.timestamp: datetime.datetime | None = self.get_timestamp_as_datetime()
 
     def __repr__(self):
-        return f"type={self.type!r} ttl_seconds={self.ttl_seconds!r} timestamp={self.timestamp} data={self.data}"
+        return f"type={self.type.name!r} ttl_seconds={self.ttl_seconds!r} timestamp={self.timestamp} data={self.data}"
 
     def get_timestamp_as_datetime(self) -> datetime.datetime | None:
         """Timestamp is stored in hours."""
@@ -366,10 +366,11 @@ class DnsRecord:
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "type": self.type,
+            "type": str(self.type.name),
             "ttl_seconds": self.ttl_seconds,
             "timestamp": self.timestamp,
-            "data": self.data._asdict(),
+            # isinstance(X, NamedTuple) does not work, but NamedTuple are subtype of tuple
+            "data": self.data._asdict() if isinstance(self.data, tuple) else self.data,
         }
 
 
