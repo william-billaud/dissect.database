@@ -110,3 +110,4 @@ typedef struct DNS_RPC_RECORD_TS {
 
 """
 c_dns_record = cstruct(dns_record_def)
+DNS_RECORD_TYPE = c_dns_record.DNS_RECORD_TYPE

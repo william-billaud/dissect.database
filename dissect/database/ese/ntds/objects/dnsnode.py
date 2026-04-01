@@ -4,11 +4,10 @@ import datetime
 import logging
 import socket
 import struct
-from typing import NamedTuple
+from functools import cached_property
+from typing import Any, NamedTuple
 
-from dissect.cstruct.utils import hexdump
-
-from dissect.database.ese.ntds.objects.c_dns_record import c_dns_record
+from dissect.database.ese.ntds.objects.c_dns_record import DNS_RECORD_TYPE, c_dns_record
 from dissect.database.ese.ntds.objects.top import Top
 
 log = logging.getLogger(__name__)
@@ -38,12 +37,60 @@ def swap_endianess(data: int, int_len: int = 2, unsigned: bool = True) -> int:
     return struct.unpack(f">{struct_letter}", struct.pack(f"<{struct_letter}", int(data)))[0]
 
 
+def parse_rfc1035_dns_name(data: bytes) -> str:
+    """Parse DNS name as specified in rfc1035#section-3.1 format.
+
+    References:
+        - https://datatracker.ietf.org/doc/html/rfc1035#section-3.1
+    """
+    if not data:
+        return ""
+    _nb_segment = data[0]
+    name_parts = []
+    offset = 1
+    # Domain names in messages are expressed in terms of a sequence of labels.
+    # Each label is represented as a one octet length field followed by that
+    # number of octets.  Since every domain name ends with the null label of
+    # the root, a domain name is terminated by a length byte of zero.
+    while offset < len(data):
+        length = data[offset]
+        if length == 0:
+            name_parts.append("")
+            break
+        # The high order two bits of every length octet must be zero, and the
+        # remaining six bits of the length field limit the label to 63 octets or
+        # less.
+        if length > 63:  # Compression pointer
+            return "<error>"
+
+        offset += 1
+        if offset + length > len(data):
+            return "<error>"
+
+        part = data[offset : offset + length].decode("utf-8", errors="backslashreplace")
+        name_parts.append(part)
+        offset += length
+    return ".".join(name_parts) if name_parts else ""
+
+
 class DnsARecord(NamedTuple):
     ipv4_address: str
 
     @property
     def ip_address(self) -> str:
         return self.ipv4_address
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> DnsARecord | None:
+        """Parse A record (IPv4 address).
+
+        References:
+            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/117c2ff9-9094-45b2-83c2-5e44518e0bac
+        """
+        if len(data) >= 4:
+            ip = socket.inet_ntop(socket.AF_INET, data[:4])
+            return cls(ipv4_address=ip)
+        return None
 
 
 class DnsAAAARecord(NamedTuple):
@@ -53,16 +100,53 @@ class DnsAAAARecord(NamedTuple):
     def ip_address(self) -> str:
         return self.ipv6_address
 
+    @classmethod
+    def from_bytes(cls, data: bytes) -> DnsAAAARecord | None:
+        """Parse AAAA record (IPv4 address).
+
+        References:
+            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/ee33fef1-6e82-42d0-8107-0f6d21be072a
+        """
+        if len(data) >= 16:
+            ip = socket.inet_ntop(socket.AF_INET6, data[:16])
+            return cls(ipv6_address=ip)
+        return None
+
 
 class SOARecord(NamedTuple):
     """The DNS_RPC_RECORD_SOA structure contains information about an SOA record."""
 
     name_primary_server: str
-    serial: int
+    # Serial does not match value seen using DNS request/management interface
+    # As this is not the most important field, we simply ignore it instead a showing a errored value
+    # serial: int
     refresh: int
     retry: int
     minimum_ttl: int
     zone_administrator_email: str
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> SOARecord | None:
+        """Parse SOA records.
+
+        References:
+            https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/dcd3ec16-d6bf-4bb4-9128-6172f9e5f066
+        """
+        try:
+            dns_rpc_record_soa = c_dns_record.DNS_RPC_RECORD_SOA(data)
+            return cls(
+                name_primary_server=parse_rfc1035_dns_name(dns_rpc_record_soa.namePrimaryServer.dnsName),
+                # Serial does not match value seen using DNS request/management interface
+                # As this is not the most important field, we simply ignore it instead a showing an errored value
+                # serial=swap_endianess(dns_rpc_record_soa.Serial, int_len=4),
+                refresh=swap_endianess(dns_rpc_record_soa.Refresh, int_len=4),
+                retry=swap_endianess(dns_rpc_record_soa.Retry, int_len=4),
+                minimum_ttl=swap_endianess(dns_rpc_record_soa.MinimumTtl, int_len=4),
+                zone_administrator_email=parse_rfc1035_dns_name(dns_rpc_record_soa.ZoneAdministratorEmail.dnsName),
+            )
+        except EOFError:
+            log.warning("Error while processing SOA record %s", data)
+            return None
 
 
 class NodeNameRecord(NamedTuple):
@@ -73,6 +157,21 @@ class NodeNameRecord(NamedTuple):
 
     name_node: str
 
+    @classmethod
+    def from_bytes(cls, data: bytes) -> NodeNameRecord | None:
+        """Parse Node Name type record, used for following record type :
+        DNS_TYPE_PTR, DNS_TYPE_N, DNS_TYPE_CNAM, DNS_TYPE_DNAM,
+        DNS_TYPE_M, DNS_TYPE_M, DNS_TYPE_M, DNS_TYPE_M, DNS_TYPE_MF.
+
+        References:
+            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/8f986756-f151-4f5b-bfcf-0d85be8b0d7e
+        """
+        try:
+            return NodeNameRecord(parse_rfc1035_dns_name(c_dns_record.DNS_RPC_NAME(data).dnsName))
+        except EOFError:
+            log.warning("Error while processing node name record %s", data)
+            return None
+
 
 class StringRecord(NamedTuple):
     """The DNS_RPC_RECORD_STRING structure contains information about a DNS record of any of the following types:
@@ -80,6 +179,30 @@ class StringRecord(NamedTuple):
     """
 
     stringData: str
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> StringRecord | None:
+        """Parse Node Name type record, used for following record type :
+        DNS_TYPE_HINFO, DNS_TYPE_ISDN, DNS_TYPE_TXT, DNS_TYPE_X25, DNS_TYPE_LOC.
+
+        Test using GUI does not allow to create record with a line length > 255 char.
+
+        References:
+            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/69166ff5-36c1-4542-9243-13b8931fa447
+        """
+        records = []
+        try:
+            data_consumed = 0
+
+            while data_consumed < len(data):
+                rpc_name = c_dns_record.DNS_RPC_NAME(data[data_consumed:])
+                data_consumed += len(rpc_name)
+
+                records.append(rpc_name.dnsName.decode("utf-8", errors="backslashreplace"))
+            return cls("\n".join(records))
+        except EOFError:
+            log.warning("Error while processing node name record %s : %s", data, records, exc_info=True)
+            return None
 
 
 class NamePreferenceRecord(NamedTuple):
@@ -90,6 +213,23 @@ class NamePreferenceRecord(NamedTuple):
     name_exchange: str
     preference: int
 
+    @classmethod
+    def from_bytes(cls, data: bytes) -> NamePreferenceRecord | None:
+        """Parse DNS_RPC_RECORD_NAME_PREFERENCE record (E.g Mx).
+
+        References:
+            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/f647d391-6614-4c3e-b38b-4df971590eb6
+        """
+        try:
+            dns_rpc_record_name_preference = c_dns_record.DNS_RPC_RECORD_NAME_PREFERENCE(data)
+            return cls(
+                preference=swap_endianess(dns_rpc_record_name_preference.Preference, 2),
+                name_exchange=parse_rfc1035_dns_name(dns_rpc_record_name_preference.nameExchange.dnsName),
+            )
+        except EOFError:
+            log.warning("Error while processing name preference record %s", data)
+            return None
+
 
 class SRVRecord(NamedTuple):
     """SRV ressource records."""
@@ -99,11 +239,49 @@ class SRVRecord(NamedTuple):
     weight: int
     priority: int
 
+    @classmethod
+    def from_bytes(cls, data: bytes) -> SRVRecord | None:
+        """Parse SRV record.
+
+        References:
+            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/db37cab7-f121-43ba-81c5-ca0e198d4b9a
+        """
+        try:
+            dns_rpc_record_srv = c_dns_record.DNS_RPC_RECORD_SRV(data)
+            target = parse_rfc1035_dns_name(dns_rpc_record_srv.nameTarget.dnsName)
+            return SRVRecord(
+                priority=dns_rpc_record_srv.Priority,
+                weight=swap_endianess(dns_rpc_record_srv.Weight, 2),
+                port=swap_endianess(dns_rpc_record_srv.Port, 2),
+                name_target=target,
+            )
+        except EOFError:
+            log.warning("Error while processing SRV record %s", data)
+            return None
+
 
 class TombStonedRecord(NamedTuple):
     """ZERO ressource records."""
 
     entombed_time: datetime.datetime
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> TombStonedRecord | None:
+        """The DNS_RPC_RECORD_TS specifies information for a node that has been tombstoned,
+        used for following record type : DNS_TYPE_ZERO.
+
+        References:
+            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/69166ff5-36c1-4542-9243-13b8931fa447
+        """
+        try:
+            ts_hundred_nano_seconds = c_dns_record.DNS_RPC_RECORD_TS(data).EntombedTime
+            if ts_hundred_nano_seconds == 0:
+                return None
+            base_date = datetime.datetime(1601, 1, 1, tzinfo=datetime.timezone.utc)
+            return TombStonedRecord(base_date + datetime.timedelta(microseconds=ts_hundred_nano_seconds / 10))
+        except EOFError:
+            log.warning("Error while processing node name record%s", data)
+            return None
 
 
 class DnsRecord:
@@ -132,6 +310,7 @@ class DnsRecord:
             base_date = datetime.datetime(1601, 1, 1, tzinfo=datetime.timezone.utc)
             return base_date + datetime.timedelta(hours=self.c_record_header.TimeStamp)
         except OverflowError:
+            log.warning("Overflow error will trying to parse dns node timestamp")
             return None
 
     @property
@@ -148,13 +327,13 @@ class DnsRecord:
         | None
     ):
         data = bytearray(self.c_record_header.Data)
-        DNS_RECORD_TYPE = c_dns_record.DNS_RECORD_TYPE
 
+        # Process most commons DNS records type
         match self.type:
             case DNS_RECORD_TYPE.A:
-                return self._parse_a_record(data)
+                return DnsARecord.from_bytes(data)
             case c_dns_record.DNS_RECORD_TYPE.AAAA:
-                return self._parse_aaaa_record(data)
+                return DnsAAAARecord.from_bytes(data)
             case (
                 DNS_RECORD_TYPE.PTR
                 | DNS_RECORD_TYPE.NS
@@ -166,13 +345,13 @@ class DnsRecord:
                 | DNS_RECORD_TYPE.MD
                 | DNS_RECORD_TYPE.MF
             ):
-                return self._parse_node_name_record(data)
+                return NodeNameRecord.from_bytes(data)
             case DNS_RECORD_TYPE.MX | DNS_RECORD_TYPE.AFSDB | DNS_RECORD_TYPE.RT:
-                return self._parse_name_preference_record(data)
+                return NamePreferenceRecord.from_bytes(data)
             case DNS_RECORD_TYPE.SRV:
-                return self._parse_srv_record(data)
+                return SRVRecord.from_bytes(data)
             case DNS_RECORD_TYPE.SOA:
-                return self._parse_soa_record(data)
+                return SOARecord.from_bytes(data)
             case (
                 DNS_RECORD_TYPE.HINFO
                 | DNS_RECORD_TYPE.ISDN
@@ -180,185 +359,10 @@ class DnsRecord:
                 | DNS_RECORD_TYPE.X25
                 | DNS_RECORD_TYPE.LOC
             ):
-                return self._parse_string_record(data)
+                return StringRecord.from_bytes(data)
             case DNS_RECORD_TYPE.ZERO:
-                return self._parse_tombstoned_record(data)
+                return TombStonedRecord.from_bytes(data)
         return data
-
-    @classmethod
-    def _parse_a_record(cls, data: bytes) -> DnsARecord | None:
-        """Parse A record (IPv4 address).
-
-        References:
-            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/117c2ff9-9094-45b2-83c2-5e44518e0bac
-        """
-        if len(data) >= 4:
-            ip = socket.inet_ntop(socket.AF_INET, data[:4])
-            return DnsARecord(ipv4_address=ip)
-        return None
-
-    @classmethod
-    def _parse_aaaa_record(cls, data: bytes) -> DnsAAAARecord | None:
-        """Parse AAAA record (IPv4 address).
-
-        References:
-            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/ee33fef1-6e82-42d0-8107-0f6d21be072a
-        """
-        if len(data) >= 16:
-            ip = socket.inet_ntop(socket.AF_INET6, data[:16])
-            return DnsAAAARecord(ipv6_address=ip)
-        return None
-
-    @classmethod
-    def _parse_soa_record(cls, data: bytes) -> SOARecord | None:
-        """Parse SOA records.
-
-        References:
-            https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/dcd3ec16-d6bf-4bb4-9128-6172f9e5f066
-        """
-        try:
-            dns_rpc_record_soa = c_dns_record.DNS_RPC_RECORD_SOA(data)
-
-            return SOARecord(
-                name_primary_server=cls._parse_dns_name(dns_rpc_record_soa.namePrimaryServer.dnsName),
-                serial=swap_endianess(dns_rpc_record_soa.Serial, int_len=4),
-                refresh=swap_endianess(dns_rpc_record_soa.Refresh, int_len=4),
-                retry=swap_endianess(dns_rpc_record_soa.Retry, int_len=4),
-                minimum_ttl=swap_endianess(dns_rpc_record_soa.MinimumTtl, int_len=4),
-                zone_administrator_email=cls._parse_dns_name(dns_rpc_record_soa.ZoneAdministratorEmail.dnsName),
-            )
-        except EOFError:
-            return None
-
-    @classmethod
-    def _parse_node_name_record(cls, data: bytes) -> NodeNameRecord | None:
-        """Parse Node Name type record, used for following record type :
-        DNS_TYPE_PTR, DNS_TYPE_N, DNS_TYPE_CNAM, DNS_TYPE_DNAM,
-        DNS_TYPE_M, DNS_TYPE_M, DNS_TYPE_M, DNS_TYPE_M, DNS_TYPE_MF.
-
-        References:
-            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/8f986756-f151-4f5b-bfcf-0d85be8b0d7e
-        """
-        try:
-            return NodeNameRecord(cls._parse_dns_name(c_dns_record.DNS_RPC_NAME(data).dnsName))
-        except EOFError:
-            log.warning("Error while processing node name record%s", data)
-            hexdump(data)
-            return None
-
-    @classmethod
-    def _parse_name_preference_record(cls, data: bytes) -> NamePreferenceRecord | None:
-        """Parse DNS_RPC_RECORD_NAME_PREFERENCE record (E.g Mx).
-
-        References:
-            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/f647d391-6614-4c3e-b38b-4df971590eb6
-        """
-        try:
-            dns_rpc_record_name_preference = c_dns_record.DNS_RPC_RECORD_NAME_PREFERENCE(data)
-            return NamePreferenceRecord(
-                preference=swap_endianess(dns_rpc_record_name_preference.Preference, 2),
-                name_exchange=cls._parse_dns_name(dns_rpc_record_name_preference.nameExchange.dnsName),
-            )
-        except EOFError:
-            return None
-
-    @classmethod
-    def _parse_srv_record(cls, data: bytes) -> SRVRecord | None:
-        """Parse SRV record.
-
-        References:
-            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/db37cab7-f121-43ba-81c5-ca0e198d4b9a
-        """
-        try:
-            dns_rpc_record_srv = c_dns_record.DNS_RPC_RECORD_SRV(data)
-            target = cls._parse_dns_name(dns_rpc_record_srv.nameTarget.dnsName)
-            return SRVRecord(
-                priority=dns_rpc_record_srv.Priority,
-                weight=swap_endianess(dns_rpc_record_srv.Weight, 2),
-                port=swap_endianess(dns_rpc_record_srv.Port, 2),
-                name_target=target,
-            )
-        except EOFError:
-            return None
-
-    @classmethod
-    def _parse_string_record(cls, data: bytes) -> StringRecord | None:
-        """Parse Node Name type record, used for following record type :
-        DNS_TYPE_HINFO, DNS_TYPE_ISDN, DNS_TYPE_TXT, DNS_TYPE_X25, DNS_TYPE_LOC.
-
-        Test using GUI does not allow to create record with a line length > 255 char.
-
-        References:
-            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/69166ff5-36c1-4542-9243-13b8931fa447
-        """
-        records = []
-        try:
-            data_consumed = 0
-
-            while data_consumed < len(data):
-                rpc_name = c_dns_record.DNS_RPC_NAME(data[data_consumed:])
-                data_consumed += len(rpc_name)
-
-                records.append(rpc_name.dnsName.decode("utf-8", errors="backslashreplace"))
-            return StringRecord("\n".join(records))
-        except EOFError:
-            log.warning("Error while processing node name record %s : %s", data, records, exc_info=True)
-            return None
-
-    @classmethod
-    def _parse_tombstoned_record(cls, data: bytes) -> TombStonedRecord | None:
-        """The DNS_RPC_RECORD_TS specifies information for a node that has been tombstoned,
-        used for following record type : DNS_TYPE_ZERO.
-
-        References:
-            - https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dnsp/69166ff5-36c1-4542-9243-13b8931fa447
-        """
-        try:
-            ts_hundred_nano_seconds = c_dns_record.DNS_RPC_RECORD_TS(data).EntombedTime
-            if ts_hundred_nano_seconds == 0:
-                return None
-            base_date = datetime.datetime(1601, 1, 1, tzinfo=datetime.timezone.utc)
-            return TombStonedRecord(base_date + datetime.timedelta(microseconds=ts_hundred_nano_seconds / 10))
-        except EOFError:
-            log.warning("Error while processing node name record%s", data)
-            hexdump(data)
-            return None
-
-    @classmethod
-    def _parse_dns_name(cls, data: bytes) -> str:
-        """Parse DNS name as specified in rfc1035#section-3.1 format.
-
-        References:
-            - https://datatracker.ietf.org/doc/html/rfc1035#section-3.1
-        """
-        if not data:
-            return ""
-        _nb_segment = data[0]
-        name_parts = []
-        offset = 1
-        # Domain names in messages are expressed in terms of a sequence of labels.
-        # Each label is represented as a one octet length field followed by that
-        # number of octets.  Since every domain name ends with the null label of
-        # the root, a domain name is terminated by a length byte of zero.
-        while offset < len(data):
-            length = data[offset]
-            if length == 0:
-                name_parts.append("")
-                break
-            # The high order two bits of every length octet must be zero, and the
-            # remaining six bits of the length field limit the label to 63 octets or
-            # less.
-            if length > 63:  # Compression pointer
-                return "<error>"
-
-            offset += 1
-            if offset + length > len(data):
-                return "<error>"
-
-            part = data[offset : offset + length].decode("utf-8", errors="backslashreplace")
-            name_parts.append(part)
-            offset += length
-        return ".".join(name_parts) if name_parts else ""
 
 
 class DnsNode(Top):
@@ -372,7 +376,7 @@ class DnsNode(Top):
     __object_class__ = "dnsNode"
 
     def __repr_body__(self) -> str:
-        return f"name={self.name!r}, records=|{'|'.join(repr(d) for d in self.dns_record)}|"
+        return f"dns_name={self.distinguished_name_as_dns_name}, records=|{'|'.join(repr(d) for d in self.dns_record)}|"
 
     @property
     def dns_record(self) -> list[DnsRecord]:
@@ -380,3 +384,18 @@ class DnsNode(Top):
         if dns_record is None:
             return []
         return [DnsRecord(x) for x in dns_record]
+
+    @cached_property
+    def distinguished_name_as_dns_name(self) -> str:
+        node = self.distinguished_name
+        ret = [self.name] if self.name != "@" else []  # @ means same as parent folder
+        while (i := node.parent).object.__object_class__ in ["dnsNode", "dnsZone"]:
+            ret.append(i.object.name)
+            node = i
+        return ".".join(ret).replace("\n", "\\n")
+
+    def as_dict(self) -> dict[str, Any]:
+        ret = super().as_dict()
+        ret["distinguished_name_as_dns_name"] = self.distinguished_name_as_dns_name
+        ret["parsed_dns_records"] = self.dns_record
+        return ret
