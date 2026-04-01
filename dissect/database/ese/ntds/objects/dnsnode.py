@@ -364,6 +364,14 @@ class DnsRecord:
                 return TombStonedRecord.from_bytes(data)
         return data
 
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "type": self.type,
+            "ttl_seconds": self.ttl_seconds,
+            "timestamp": self.timestamp,
+            "data": self.data._asdict(),
+        }
+
 
 class DnsNode(Top):
     """Represents a DNS node object in the Active Directory.
@@ -397,5 +405,5 @@ class DnsNode(Top):
     def as_dict(self) -> dict[str, Any]:
         ret = super().as_dict()
         ret["distinguished_name_as_dns_name"] = self.distinguished_name_as_dns_name
-        ret["parsed_dns_records"] = self.dns_record
+        ret["parsed_dns_records"] = [r.as_dict() for r in self.dns_record]
         return ret
