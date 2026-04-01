@@ -396,6 +396,12 @@ class DnsNode(Top):
 
     @cached_property
     def distinguished_name_as_dns_name(self) -> str:
+        """Create a DNS name from node and parent names.
+
+        E.g :
+            * DC=NORTH,DC=SEVENKINGDOMS.LOCAL,CN=MICROSOFTDNS,DC=DOMAINDNSZONES,DC=SEVENKINGDOMS,DC=LOCAL ->
+                north.sevenkingdoms.local
+        """
         node = self.distinguished_name
         ret = [self.name] if self.name != "@" else []  # @ means same as parent folder
         while (i := node.parent).object.__object_class__ in ["dnsNode", "dnsZone"]:
